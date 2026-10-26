@@ -10,12 +10,13 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Beki River | Flood Intelligence",
-    page_icon="🌊",
+    page_icon="ðŸŒŠ",
     layout="wide",
 )
 
 BASE = Path(__file__).resolve().parent
 DATA_FILE = BASE / "flood_grids.npz"
+COORD_FILE = BASE / "coordinate_grids.npz"
 
 COLORS = [
     "#D9E2EC", "#36A2EB", "#63C7B2",
@@ -136,8 +137,8 @@ def predict_at_discharge(q, discharges, depth, velocity):
 # ---------------- HEADER ----------------
 st.markdown("""
 <div class="hero">
-  <h1>🌊 BEKI RIVER FLOOD INTELLIGENCE</h1>
-  <p>Spatial flood hazard assessment · Hydraulic scenario analysis ·
+  <h1>BEKI RIVER FLOOD INTELLIGENCE</h1>
+  <p>Spatial flood hazard assessment Â· Hydraulic scenario analysis Â·
   Discharge-based estimation</p>
 </div>
 """, unsafe_allow_html=True)
@@ -196,12 +197,12 @@ wet_count = int(wet.sum())
 total = classes.size
 
 st.caption(
-    f"Method: {method} · Reference scenarios: "
+    f"Method: {method} Â· Reference scenarios: "
     f"{bracket[0]} and {bracket[1]} cumecs"
 )
 
 c1, c2, c3, c4 = st.columns(4)
-c1.metric("Selected discharge", f"{q:,.0f} m³/s")
+c1.metric("Selected discharge", f"{q:,.0f} cumecs")
 c2.metric("Wet cells", f"{wet_count:,}")
 c3.metric("High + very high cells", f"{high_count:,}")
 c4.metric("Grid cells", f"{total:,}")
@@ -212,21 +213,35 @@ left, right = st.columns([1.8, 1])
 with left:
     st.subheader("Flood hazard map")
     st.caption(
-        "Grid-based visualization. Geographic registration has not yet "
-        "been verified; axes are grid indices."
+        "Hazard cells plotted using the supplied projected coordinate grid. "
+        "Coordinate reference system and geographic registration still "
+        "require confirmation."
     )
+
+    with np.load(COORD_FILE) as coord_data:
+        X = coord_data["x"]
+        Y = coord_data["y"]
+
+    if X.shape != (classes.shape[0] + 1, classes.shape[1] + 1):
+        st.error("Coordinate grid and hazard grid dimensions do not match.")
+        st.stop()
 
     cmap = ListedColormap(COLORS)
     norm = BoundaryNorm(np.arange(-0.5, 6.5, 1), cmap.N)
 
-    fig, ax = plt.subplots(figsize=(11, 5.5))
-    ax.imshow(classes, cmap=cmap, norm=norm, interpolation="nearest")
-    ax.set_xlabel("Grid column")
-    ax.set_ylabel("Grid row")
+    fig, ax = plt.subplots(figsize=(8, 10))
+    ax.pcolormesh(
+        X, Y, classes,
+        shading="flat",
+        cmap=cmap,
+        norm=norm,
+    )
+    ax.set_aspect("equal")
+    ax.set_xlabel("Projected X coordinate")
+    ax.set_ylabel("Projected Y coordinate")
     ax.set_title(f"Estimated hazard classes at {q:,.0f} cumecs")
     st.pyplot(fig, use_container_width=True)
     plt.close(fig)
-
 with right:
     st.subheader("Hazard distribution")
     distribution = pd.DataFrame({
@@ -288,3 +303,4 @@ st.caption(
     "thresholds, masks, spatial registration, and model accuracy require "
     "further validation."
 )
+
